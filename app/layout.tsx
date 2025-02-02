@@ -1,7 +1,6 @@
 import "./globals.css"
-import Nav from "@/components/nav"
 import type { Metadata } from "next"
-import type React from "react" // Import React
+import type React from "react"
 
 export const metadata: Metadata = {
   title: "Simple CMS",
@@ -16,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className="bg-gray-50">
-        <Nav />
+        {/* Only show Nav on authenticated routes */}
         {children}
       </body>
     </html>
