@@ -18,12 +18,11 @@ export default function Dashboard() {
   }, [])
 
   async function fetchContents() {
-    const res = await fetch("/api/content", {
-      headers: { "x-api-key": localStorage.getItem("apiKey") || "" },
-    })
+    const res = await fetch("/api/content")
     if (res.ok) {
       setContents(await res.json())
-    } else {
+    } else if (res.status === 401) {
+      // Unauthorized, redirect to login
       router.push("/login")
     }
   }
@@ -36,23 +35,25 @@ export default function Dashboard() {
       method,
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": localStorage.getItem("apiKey") || "",
       },
       body,
     })
     if (res.ok) {
       resetForm()
       fetchContents()
+    } else if (res.status === 401) {
+      router.push("/login")
     }
   }
 
   async function handleDelete(id: string) {
     const res = await fetch(`/api/content?id=${id}`, {
       method: "DELETE",
-      headers: { "x-api-key": localStorage.getItem("apiKey") || "" },
     })
     if (res.ok) {
       fetchContents()
+    } else if (res.status === 401) {
+      router.push("/login")
     }
   }
 
