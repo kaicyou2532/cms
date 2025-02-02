@@ -8,14 +8,25 @@ datasource db {
 }
 
 model Content {
-  id        String   @id @default(cuid())
-  title     String
-  body      String
-  slug      String   @unique
-  status    String   @default("draft")
-  type      String   @default("post")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  slug        String    @unique
+  status      String    @default("draft")
+  type        String    @default("post")
+  fileType    String?   // For media files: image, video, etc.
+  fileSize    Int?      // In bytes
+  dimensions  String?   // For images: "widthxheight"
+  mimeType    String?   // MIME type
+  tags        Tag[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  contents  Content[]
 }
 
 model User {

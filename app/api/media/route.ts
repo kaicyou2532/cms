@@ -66,6 +66,10 @@ export async function POST(request: Request) {
     const title = formData.get("title") as string
     const tags = (formData.get("tags") as string).split(",").filter(Boolean)
 
+    if (!file || !title) {
+      return NextResponse.json({ error: "File and title are required" }, { status: 400 })
+    }
+
     // Here you would typically process the file, get its metadata,
     // and store it in your preferred storage solution
     const fileSize = file.size
