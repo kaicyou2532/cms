@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 import { validateSession } from "@/lib/auth"
 import { cookies } from "next/headers"
+import sharp from "sharp"
 
 const prisma = new PrismaClient()
 
@@ -45,6 +46,9 @@ export async function GET(request: Request) {
         include: {
           tags: true,
         },
+        orderBy: {
+          createdAt: "desc",
+        },
       })
       return NextResponse.json(media)
     }
@@ -64,16 +68,15 @@ export async function POST(request: Request) {
     const formData = await request.formData()
     const file = formData.get("file") as File
     const title = formData.get("title") as string
-    const tags = (formData.get("tags") as string).split(",").filter(Boolean)
+    const tags = (formData.get("tags") as string)?.split(",").filter(Boolean) || []
 
     if (!file || !title) {
       return NextResponse.json({ error: "File and title are required" }, { status: 400 })
     }
 
-    // Here you would typically process the file, get its metadata,
-    // and store it in your preferred storage solution
-    const fileSize = file.size
-    const mimeType = file.type
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const image = sharp(buffer)
+    const metadata = await image.metadata()
 
     const content = await prisma.content.create({
       data: {
@@ -81,9 +84,10 @@ export async function POST(request: Request) {
         body: "", // For media files, body might be empty or contain metadata
         slug: title.toLowerCase().replace(/\s+/g, "-"),
         type: "media",
-        fileType: mimeType.split("/")[0],
-        fileSize,
-        mimeType,
+        fileType: file.type.split("/")[0],
+        fileSize: file.size,
+        mimeType: file.type,
+        dimensions: metadata.width && metadata.height ? `${metadata.width} x ${metadata.height}` : null,
         tags: {
           connectOrCreate: tags.map((tag) => ({
             where: { name: tag },

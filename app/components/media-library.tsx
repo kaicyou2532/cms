@@ -1,176 +1,222 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Upload, Trash2, Edit2 } from "lucide-react"
+import { Search, Upload, Edit2, Grid, List } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useRouter } from "next/navigation"
 
 interface MediaItem {
   id: string
   title: string
-  type: string
+  body: string
+  slug: string
   fileType: string
   fileSize: number
-  dimensions?: string
-  tags: { name: string }[]
+  dimensions: string | null
+  mimeType: string
   createdAt: string
+  tags: { name: string }[]
+  author?: string
 }
 
 export function MediaLibrary() {
   const [items, setItems] = useState<MediaItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedType, setSelectedType] = useState("all")
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null)
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list")
+  const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    fetchMedia()
+    fetchMediaItems()
   }, [])
 
-  async function fetchMedia() {
-    const res = await fetch("/api/content?type=media")
-    if (res.ok) {
-      const data = await res.json()
-      setItems(data)
+  async function fetchMediaItems() {
+    try {
+      const res = await fetch("/api/media")
+      if (res.ok) {
+        const data = await res.json()
+        setItems(data)
+      } else if (res.status === 401) {
+        router.push("/login")
+      }
+    } catch (error) {
+      console.error("Failed to fetch media items:", error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const filteredItems = items.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = selectedType === "all" || item.fileType === selectedType
-    return matchesSearch && matchesType
-  })
+  async function handleDelete(id: string) {
+    if (!confirm("このファイルを削除してもよろしいですか？")) return
+
+    try {
+      const res = await fetch(`/api/media?id=${id}`, {
+        method: "DELETE",
+      })
+      if (res.ok) {
+        setSelectedItem(null)
+        fetchMediaItems()
+      }
+    } catch (error) {
+      console.error("Failed to delete media item:", error)
+    }
+  }
+
+  const filteredItems = items.filter((item) => item.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Left Sidebar */}
-      <div className="w-64 border-r bg-white p-4">
-        <h2 className="mb-4 text-lg font-semibold text-sky-600">ファイルタイプ</h2>
-        <nav className="space-y-2">
-          <button
-            className={`w-full rounded-lg p-2 text-left hover:bg-sky-50 ${
-              selectedType === "all" ? "bg-sky-100 text-sky-600" : ""
-            }`}
-            onClick={() => setSelectedType("all")}
-          >
-            すべてのファイル
-          </button>
-          <button
-            className={`w-full rounded-lg p-2 text-left hover:bg-sky-50 ${
-              selectedType === "image" ? "bg-sky-100 text-sky-600" : ""
-            }`}
-            onClick={() => setSelectedType("image")}
-          >
-            画像
-          </button>
-          <button
-            className={`w-full rounded-lg p-2 text-left hover:bg-sky-50 ${
-              selectedType === "video" ? "bg-sky-100 text-sky-600" : ""
-            }`}
-            onClick={() => setSelectedType("video")}
-          >
-            動画
-          </button>
-        </nav>
-      </div>
+    <div className="flex-1 overflow-hidden">
+      {/* Header */}
+      <div className="border-b bg-white p-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-medium">メディア管理</h1>
+          <Button className="bg-[#007B63] hover:bg-[#007B63]/90">
+            <Upload className="mr-2 h-4 w-4" />
+            アップロード
+          </Button>
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        {/* Header */}
-        <div className="border-b bg-white p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-1 items-center space-x-4">
-              <div className="relative w-96">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="ファイルを検索"
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="タイプで絞り込み" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="image">画像</SelectItem>
-                  <SelectItem value="video">動画</SelectItem>
-                </SelectContent>
-              </Select>
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="relative w-96">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="フィルター"
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <Button className="bg-sky-500 hover:bg-sky-600">
-              <Upload className="mr-2 h-4 w-4" />
-              アップロード
-            </Button>
+            <div className="text-sm text-gray-500">
+              {items.length}件中{filteredItems.length}件表示
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 ${viewMode === "list" ? "text-[#007B63]" : "text-gray-400"}`}
+            >
+              <List className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 ${viewMode === "grid" ? "text-[#007B63]" : "text-gray-400"}`}
+            >
+              <Grid className="h-5 w-5" />
+            </button>
           </div>
         </div>
-
-        {/* Grid View */}
-        <div className="grid h-full grid-cols-4 gap-4 overflow-y-auto p-4">
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className={`group relative cursor-pointer rounded-lg border bg-white p-2 hover:border-sky-500 ${
-                selectedItem?.id === item.id ? "border-sky-500" : ""
-              }`}
-              onClick={() => setSelectedItem(item)}
-            >
-              <div className="aspect-video w-full overflow-hidden rounded-lg bg-gray-100">
-                {item.fileType === "image" && (
-                  <img src={`/api/media/${item.id}`} alt={item.title} className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="mt-2">
-                <h3 className="truncate text-sm font-medium">{item.title}</h3>
-                <p className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</p>
-              </div>
-              <div className="absolute right-2 top-2 hidden space-x-1 group-hover:flex">
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* Right Sidebar */}
+      {/* Table View */}
+      <div className="h-full overflow-y-auto">
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-gray-500">読み込み中...</div>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">ファイル名</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">形式</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">容量</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">画像サイズ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => (
+                <tr
+                  key={item.id}
+                  className={`cursor-pointer border-b hover:bg-gray-50 ${
+                    selectedItem?.id === item.id ? "bg-gray-50" : ""
+                  }`}
+                  onClick={() => setSelectedItem(item)}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center space-x-3">
+                      <img src={`/api/media/${item.id}`} alt="" className="h-10 w-10 rounded object-cover" />
+                      <span className="text-sm text-[#007B63]">{item.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{item.mimeType}</td>
+                  <td className="px-4 py-3 text-sm">{(item.fileSize / 1024).toFixed(2)} kB</td>
+                  <td className="px-4 py-3 text-sm">{item.dimensions || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Right Sidebar - File Details */}
       {selectedItem && (
-        <div className="w-80 border-l bg-white p-4">
-          <h2 className="mb-4 text-lg font-semibold text-sky-600">ファイル詳細</h2>
+        <div className="w-80 border-l bg-white p-6">
+          <div className="mb-6">
+            <img src={`/api/media/${selectedItem.id}`} alt="" className="w-full rounded-lg object-cover" />
+          </div>
+
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-500">タイトル</label>
-              <p className="text-sm">{selectedItem.title}</p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium">{selectedItem.title}</h2>
+              <button className="text-gray-400 hover:text-gray-600">
+                <Edit2 className="h-4 w-4" />
+              </button>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-500">タイプ</label>
-              <p className="text-sm">{selectedItem.fileType}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-500">サイズ</label>
-              <p className="text-sm">{(selectedItem.fileSize / 1024).toFixed(2)} KB</p>
-            </div>
-            {selectedItem.dimensions && (
+
+            <div className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-gray-500">寸法</label>
-                <p className="text-sm">{selectedItem.dimensions}</p>
+                <div className="text-sm text-gray-500">作成日時</div>
+                <div className="text-sm">
+                  {new Date(selectedItem.createdAt).toLocaleString("ja-JP", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
               </div>
-            )}
-            <div>
-              <label className="text-sm font-medium text-gray-500">タグ</label>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {selectedItem.tags.map((tag) => (
-                  <span key={tag.name} className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-600">
-                    {tag.name}
-                  </span>
-                ))}
+              <div>
+                <div className="text-sm text-gray-500">形式</div>
+                <div className="text-sm">{selectedItem.mimeType}</div>
               </div>
+              <div>
+                <div className="text-sm text-gray-500">容量</div>
+                <div className="text-sm">{(selectedItem.fileSize / 1024).toFixed(2)} kB</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">画像サイズ</div>
+                <div className="text-sm">{selectedItem.dimensions || "-"}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">作成者</div>
+                <div className="text-sm flex items-center space-x-1">
+                  <span>{selectedItem.author || "システム"}</span>
+                  <Edit2 className="h-3 w-3 text-gray-400" />
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">コンテンツ参照</div>
+                <div className="text-sm text-[#007B63]">1件の参照</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">タグ</div>
+                <button className="text-sm text-[#007B63]">
+                  {selectedItem.tags.length > 0 ? selectedItem.tags.map((tag) => tag.name).join(", ") : "設定する"}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-4">
+              <Button variant="outline" className="flex-1">
+                再アップロード
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={() => handleDelete(selectedItem.id)}>
+                削除
+              </Button>
             </div>
           </div>
         </div>

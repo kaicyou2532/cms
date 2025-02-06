@@ -1,4 +1,4 @@
-import Nav from "@/components/nav"
+import { Sidebar } from "@/app/components/sidebar"
 import type React from "react"
 
 export default function AuthLayout({
@@ -7,10 +7,10 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <>
-      <Nav />
-      {children}
-    </>
+    <div className="flex h-screen">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">{children}</main>
+    </div>
   )
 }
 

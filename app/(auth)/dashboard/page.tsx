@@ -2,15 +2,39 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useFormStatus } from "react-dom"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+interface Content {
+  id: string
+  title: string
+  body: string
+  slug: string
+  status: string
+  type: string
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "保存中..." : "コンテンツを保存"}
+    </Button>
+  )
+}
 
 export default function Dashboard() {
-  const [contents, setContents] = useState([])
+  const [contents, setContents] = useState<Content[]>([])
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
   const [slug, setSlug] = useState("")
   const [status, setStatus] = useState("draft")
   const [type, setType] = useState("post")
-  const [editingId, setEditingId] = useState(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -20,24 +44,33 @@ export default function Dashboard() {
   async function fetchContents() {
     const res = await fetch("/api/content")
     if (res.ok) {
-      setContents(await res.json())
+      const data = await res.json()
+      setContents(data)
     } else if (res.status === 401) {
-      // Unauthorized, redirect to login
       router.push("/login")
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     const method = editingId ? "PUT" : "POST"
-    const body = JSON.stringify({ id: editingId, title, body, slug, status, type })
+
     const res = await fetch("/api/content", {
       method,
+      body: JSON.stringify({
+        id: editingId,
+        title: formData.get("title"),
+        body: formData.get("body"),
+        slug: formData.get("slug"),
+        status: formData.get("status"),
+        type: formData.get("type"),
+      }),
       headers: {
         "Content-Type": "application/json",
       },
-      body,
     })
+
     if (res.ok) {
       resetForm()
       fetchContents()
@@ -57,7 +90,7 @@ export default function Dashboard() {
     }
   }
 
-  function handleEdit(content: any) {
+  function handleEdit(content: Content) {
     setEditingId(content.id)
     setTitle(content.title)
     setBody(content.body)
@@ -76,75 +109,79 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-white p-8">
-      <h1 className="text-3xl font-bold mb-8 text-blue-500">Content Dashboard</h1>
-      <form onSubmit={handleSubmit} className="mb-8">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
-          className="w-full p-2 mb-4 border border-blue-200 rounded"
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Content"
-          className="w-full p-2 mb-4 border border-blue-200 rounded"
-          rows={4}
-        />
-        <input
-          type="text"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="Slug"
-          className="w-full p-2 mb-4 border border-blue-200 rounded"
-        />
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="w-full p-2 mb-4 border border-blue-200 rounded"
-        >
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-        </select>
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="w-full p-2 mb-4 border border-blue-200 rounded"
-        >
-          <option value="post">Post</option>
-          <option value="page">Page</option>
-        </select>
-        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-          {editingId ? "Update" : "Add"} Content
-        </button>
-        {editingId && (
-          <button onClick={resetForm} className="ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
-            Cancel
-          </button>
-        )}
+    <div className="container mx-auto p-6">
+      <h1 className="mb-8 text-3xl font-bold">コンテンツ管理</h1>
+
+      <form onSubmit={handleSubmit} className="mb-8 space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="title">タイトル</Label>
+          <Input id="title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="body">本文</Label>
+          <Textarea id="body" name="body" value={body} onChange={(e) => setBody(e.target.value)} required rows={4} />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="slug">スラッグ</Label>
+          <Input id="slug" name="slug" value={slug} onChange={(e) => setSlug(e.target.value)} required />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="status">ステータス</Label>
+          <Select name="status" value={status} onValueChange={setStatus}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">下書き</SelectItem>
+              <SelectItem value="published">公開</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="type">タイプ</Label>
+          <Select name="type" value={type} onValueChange={setType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="post">投稿</SelectItem>
+              <SelectItem value="page">ページ</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-2">
+          <SubmitButton />
+          {editingId && (
+            <Button type="button" variant="outline" onClick={resetForm}>
+              キャンセル
+            </Button>
+          )}
+        </div>
       </form>
-      <div>
-        {contents.map((content: any) => (
-          <div key={content.id} className="mb-4 p-4 border border-blue-200 rounded">
-            <h2 className="text-xl font-bold mb-2">{content.title}</h2>
-            <p className="mb-2">{content.body}</p>
-            <p className="text-sm text-gray-500">Slug: {content.slug}</p>
-            <p className="text-sm text-gray-500">Status: {content.status}</p>
-            <p className="text-sm text-gray-500">Type: {content.type}</p>
-            <button
-              onClick={() => handleEdit(content)}
-              className="mt-2 bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => handleDelete(content.id)}
-              className="mt-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-            >
-              Delete
-            </button>
+
+      <div className="space-y-4">
+        {contents.map((content) => (
+          <div key={content.id} className="rounded-lg border p-4">
+            <h2 className="mb-2 text-xl font-bold">{content.title}</h2>
+            <p className="mb-2 text-gray-600">{content.body}</p>
+            <div className="mb-4 space-y-1 text-sm text-gray-500">
+              <p>スラッグ: {content.slug}</p>
+              <p>ステータス: {content.status}</p>
+              <p>タイプ: {content.type}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => handleEdit(content)} variant="outline" size="sm">
+                編集
+              </Button>
+              <Button onClick={() => handleDelete(content.id)} variant="destructive" size="sm">
+                削除
+              </Button>
+            </div>
           </div>
         ))}
       </div>
